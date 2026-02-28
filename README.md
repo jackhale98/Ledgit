@@ -36,14 +36,14 @@ Pre-built binaries for **macOS**, **Linux**, and **Windows** are available on th
 - Keyboard shortcuts: `Ctrl+S` (save), `Ctrl+Z` (undo), `Ctrl+Y` (redo)
 
 ### Version Control
-- **Auto-commit** — saves are automatically committed with descriptive messages based on what changed
+- **Manual commit** — select files to stage, write a message, and commit from the sidebar
 - **Commit history** — browse paginated commit log with HEAD and branch ref badges
-- **Working tree diff** — preview staged changes before committing
+- **Working tree diff** — preview file changes before committing
 - **Branching** — create, switch, and list branches
 - **Merging** — fast-forward and three-way merge with conflict detection
 - **Conflict resolution** — three-pane editor showing Ours / Merged / Theirs with per-cell accept buttons
 - **Diff viewer** — select any two commits to compare with color-coded changes (green = added, red = removed, yellow = modified)
-- **Remote operations** — push, pull, add and list remotes
+- **Push / Pull** — sync with remote repositories
 
 ### File Management
 - Browse all CSV/TSV files in the repository
@@ -120,7 +120,7 @@ ledgit/
 │   │   ├── useGitStore.ts         # Git operations & history
 │   │   └── useDiffStore.ts        # Diff/compare mode
 │   ├── hooks/                     # Custom React hooks
-│   │   ├── useAutoSave.ts         # Auto-save with commit
+│   │   ├── useAutoSave.ts         # Auto-save to disk
 │   │   ├── useKeyboardShortcuts.ts
 │   │   ├── useFileWatcher.ts      # External file change detection
 │   │   └── useDiffHighlighting.ts # Cell styling for diffs
