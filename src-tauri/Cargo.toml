@@ -30,5 +30,11 @@ log = "0.4"
 [dev-dependencies]
 tempfile = "3"
 
+[profile.release]
+strip = true       # Strip debug symbols from binary
+lto = true          # Link-time optimization across crates
+codegen-units = 1   # Maximize optimization (slower compile)
+opt-level = "s"     # Optimize for size
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
