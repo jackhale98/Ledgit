@@ -15,3 +15,23 @@ html, body, #root {
   margin: 0;
   padding: 0;
 }
+
+/* daff diff table styling */
+.daff-diff-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  font-family: monospace;
+}
+.daff-diff-table td, .daff-diff-table th {
+  border: 1px solid #e5e7eb;
+  padding: 4px 8px;
+}
+.daff-diff-table th {
+  background-color: #f3f4f6;
+  font-weight: 600;
+}
+.daff-diff-table .add { background-color: #dcfce7; }
+.daff-diff-table .remove { background-color: #fee2e2; }
+.daff-diff-table .modify { background-color: #fef9c3; }
+.daff-diff-table .header { background-color: #f3f4f6; }

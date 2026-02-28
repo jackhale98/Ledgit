@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { DiffResult } from '../types/diff';
 import * as gitIpc from '../ipc/gitIpc';
 import { compareCsv } from '../services/diffService';
+import { showToast } from '../components/common/Toast';
 
 interface DiffState {
   isCompareMode: boolean;
@@ -58,8 +59,9 @@ export const useDiffStore = create<DiffState>((set, get) => ({
       ]);
       const result = compareCsv(csvA, csvB);
       set({ diffResult: result, isLoading: false });
-    } catch {
+    } catch (err) {
       set({ isLoading: false });
+      showToast(`Diff failed: ${err}`, 'error');
     }
   },
 

@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useGitStore } from '../../stores/useGitStore';
 import { useSheetStore } from '../../stores/useSheetStore';
 import { BranchSelector } from './BranchSelector';
+import { CommitPanel } from './CommitPanel';
 import { CommitList } from './CommitList';
 
 export const VersionSidebar: React.FC = () => {
@@ -24,6 +25,7 @@ export const VersionSidebar: React.FC = () => {
         </h2>
       </div>
       <BranchSelector />
+      <CommitPanel />
       <CommitList />
     </div>
   );

@@ -6,14 +6,14 @@ import type { RepoInfo } from '../types/git';
  * Open an existing git repository at the given path.
  */
 export async function openRepo(path: string): Promise<RepoInfo> {
-  return invoke<RepoInfo>('open_repo', { path });
+  return invoke<RepoInfo>('repo_open', { path });
 }
 
 /**
  * Initialize a new git repository at the given path.
  */
 export async function init(path: string): Promise<RepoInfo> {
-  return invoke<RepoInfo>('init_repo', { path });
+  return invoke<RepoInfo>('repo_init', { path });
 }
 
 /**

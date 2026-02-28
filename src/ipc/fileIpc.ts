@@ -5,7 +5,7 @@ import type { SheetData, Column, Row, FileInfo } from '../types/sheet';
  * Read a CSV file and return structured sheet data.
  */
 export async function readCsv(filePath: string): Promise<SheetData> {
-  return invoke<SheetData>('read_csv', { filePath });
+  return invoke<SheetData>('file_read_csv', { filePath });
 }
 
 /**
@@ -16,7 +16,7 @@ export async function writeCsv(
   columns: Column[],
   rows: Row[],
 ): Promise<{ bytesWritten: number }> {
-  return invoke<{ bytesWritten: number }>('write_csv', {
+  return invoke<{ bytesWritten: number }>('file_write_csv', {
     filePath,
     columns,
     rows,
@@ -27,7 +27,7 @@ export async function writeCsv(
  * List all CSV files tracked in the repository.
  */
 export async function list(): Promise<FileInfo[]> {
-  return invoke<FileInfo[]>('list_files');
+  return invoke<FileInfo[]>('file_list');
 }
 
 /**
@@ -37,12 +37,12 @@ export async function create(
   fileName: string,
   columns: Column[],
 ): Promise<FileInfo> {
-  return invoke<FileInfo>('create_file', { fileName, columns });
+  return invoke<FileInfo>('file_create', { filePath: fileName, columns });
 }
 
 /**
  * Delete a CSV file from disk.
  */
 export async function deleteCsv(filePath: string): Promise<void> {
-  return invoke<void>('delete_file', { filePath });
+  return invoke<void>('file_delete', { filePath });
 }

@@ -62,20 +62,42 @@ export const SpreadsheetEditor: React.FC = () => {
   }
 
   return (
-    <div className="ag-theme-alpine h-full w-full">
-      <AgGridReact
-        columnDefs={columnDefs}
-        rowData={rowData}
-        defaultColDef={defaultColDef}
-        onCellValueChanged={onCellValueChanged}
-        onGridReady={onGridReady}
-        getRowId={(params) => String(params.data.__rowIndex)}
-        undoRedoCellEditing={false}
-        getContextMenuItems={() => contextMenuItems}
-        singleClickEdit={true}
-        stopEditingWhenCellsLoseFocus={true}
-        animateRows={false}
-      />
+    <div className="flex h-full w-full flex-col">
+      <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-50 px-3 py-1.5">
+        <button
+          onClick={() => addRow()}
+          className="rounded bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-200 hover:bg-gray-100"
+        >
+          + Row
+        </button>
+        <button
+          onClick={() => {
+            const name = prompt('Enter column name:');
+            if (name) {
+              const field = name.toLowerCase().replace(/\s+/g, '_');
+              addColumn({ field, header_name: name });
+            }
+          }}
+          className="rounded bg-white px-2 py-1 text-xs font-medium text-gray-600 shadow-sm ring-1 ring-gray-200 hover:bg-gray-100"
+        >
+          + Column
+        </button>
+      </div>
+      <div className="ag-theme-alpine flex-1">
+        <AgGridReact
+          columnDefs={columnDefs}
+          rowData={rowData}
+          defaultColDef={defaultColDef}
+          onCellValueChanged={onCellValueChanged}
+          onGridReady={onGridReady}
+          getRowId={(params) => String(params.data.__rowIndex)}
+          undoRedoCellEditing={false}
+          getContextMenuItems={() => contextMenuItems}
+          singleClickEdit={true}
+          stopEditingWhenCellsLoseFocus={true}
+          animateRows={false}
+        />
+      </div>
     </div>
   );
 };
