@@ -72,7 +72,7 @@ describe('useGitStore', () => {
   describe('fetchLog', () => {
     it('fetches commits and clears loading state', async () => {
       const mockCommits = [
-        { hash: 'abc1234', short_hash: 'abc1234', message: 'Initial', author: 'Test', timestamp: '2024-01-01T00:00:00Z' },
+        { hash: 'abc1234', short_hash: 'abc1234', message: 'Initial', author: 'Test', timestamp: '2024-01-01T00:00:00Z', refs: [] },
       ];
       mockedLog.mockResolvedValue(mockCommits);
 
@@ -118,6 +118,7 @@ describe('useGitStore', () => {
         message: 'Add data',
         author: 'Test',
         timestamp: '2024-01-01T00:00:00Z',
+        refs: [],
       };
       mockedCommit.mockResolvedValue(mockCommit);
 
@@ -134,6 +135,7 @@ describe('useGitStore', () => {
         message: 'Partial commit',
         author: 'Test',
         timestamp: '2024-01-01T00:00:00Z',
+        refs: [],
       };
       mockedCommit.mockResolvedValue(mockCommit);
 
