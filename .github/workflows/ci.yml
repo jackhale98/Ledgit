@@ -1,28 +1,18 @@
-name: Release
+name: CI
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-latest
-            rust_target: x86_64-unknown-linux-gnu
-          - platform: macos-latest
-            rust_target: aarch64-apple-darwin
-          - platform: windows-latest
-            rust_target: x86_64-pc-windows-msvc
-
-    runs-on: ${{ matrix.platform }}
+  check:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -36,8 +26,6 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust_target }}
 
       - name: Cache Cargo registry and build
         uses: actions/cache@v4
@@ -51,7 +39,6 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -66,14 +53,16 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Build Tauri app and create release
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Ledgit ${{ github.ref_name }}"
-          releaseBody: "See the assets below to download Ledgit for your platform."
-          releaseDraft: true
-          prerelease: false
-          args: --target ${{ matrix.rust_target }}
+      - name: TypeScript check
+        run: npm run lint
+
+      - name: Run frontend tests
+        run: npm test || true
+
+      - name: Rust check
+        working-directory: src-tauri
+        run: cargo check
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test
