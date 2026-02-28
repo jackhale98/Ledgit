@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
 import { useGitStore } from '../../stores/useGitStore';
-import { useSheetStore } from '../../stores/useSheetStore';
 import { BranchSelector } from './BranchSelector';
 import { CommitPanel } from './CommitPanel';
 import { CommitList } from './CommitList';
@@ -9,13 +8,13 @@ export const VersionSidebar: React.FC = () => {
   const fetchLog = useGitStore((s) => s.fetchLog);
   const fetchBranches = useGitStore((s) => s.fetchBranches);
   const fetchStatus = useGitStore((s) => s.fetchStatus);
-  const filePath = useSheetStore((s) => s.filePath);
+  const currentBranch = useGitStore((s) => s.currentBranch);
 
   useEffect(() => {
     fetchBranches();
     fetchStatus();
-    fetchLog(filePath ?? undefined);
-  }, [fetchBranches, fetchStatus, fetchLog, filePath]);
+    fetchLog();
+  }, [fetchBranches, fetchStatus, fetchLog, currentBranch]);
 
   return (
     <div className="flex h-full w-64 flex-col border-l border-gray-200 bg-white">

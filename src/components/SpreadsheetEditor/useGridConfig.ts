@@ -33,8 +33,10 @@ export function useGridConfig(
       minWidth: 100,
       editable: true,
       sortable: true,
-      filter: true,
+      filter: 'agTextColumnFilter',
+      floatingFilter: true,
       resizable: true,
+      suppressHeaderFilterButton: true,
     }),
     [],
   );

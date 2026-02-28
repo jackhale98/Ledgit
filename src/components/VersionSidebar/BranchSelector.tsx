@@ -14,6 +14,7 @@ export const BranchSelector: React.FC = () => {
   const pull = useGitStore((s) => s.pull);
   const fetchBranches = useGitStore((s) => s.fetchBranches);
   const fetchStatus = useGitStore((s) => s.fetchStatus);
+  const fetchLog = useGitStore((s) => s.fetchLog);
 
   const [isDropdownOpen, setDropdownOpen] = useState(false);
   const [isCreateModalOpen, setCreateModalOpen] = useState(false);
@@ -27,6 +28,8 @@ export const BranchSelector: React.FC = () => {
       setDropdownOpen(false);
       showToast(`Switched to branch "${branch}"`, 'success');
       fetchStatus();
+      fetchBranches();
+      fetchLog();
     } catch (err) {
       showToast(`Failed to switch branch: ${err}`, 'error');
     }
