@@ -27,7 +27,9 @@ impl GitService {
             return Err(AppError::RepoExists(path.to_string_lossy().to_string()));
         }
 
-        let repo = Repository::init(path)?;
+        let mut init_opts = git2::RepositoryInitOptions::new();
+        init_opts.initial_head("main");
+        let repo = Repository::init_opts(path, &init_opts)?;
 
         // Create .gitattributes for CSV diff
         let gitattributes = "*.csv diff=csv\n*.tsv diff=tsv\n";
