@@ -2,6 +2,7 @@ import Papa from 'papaparse';
 import {
   TableView,
   compareTables,
+  CompareFlags,
   TableDiff,
   DiffRender,
   Merger,
@@ -115,28 +116,19 @@ export function compareCsv(csvA: string, csvB: string): DiffResult {
   const tableA = new TableView(csvToTable(csvA));
   const tableB = new TableView(csvToTable(csvB));
 
-  const alignment = compareTables(tableA, tableB).align();
+  const flags = new CompareFlags();
+  const alignment = compareTables(tableA, tableB, flags).align();
 
-  // Build highlight table
-  const highlightData: any[][] = [];
-  const emptyRow: any[] = [];
-  // Create an output table large enough
-  for (let i = 0; i < tableB.width() + 1; i++) {
-    emptyRow.push('');
-  }
-  for (let i = 0; i < tableA.height() + tableB.height() + 2; i++) {
-    highlightData.push([...emptyRow]);
-  }
-  const highlightTable = new TableView(highlightData);
-
-  const diff = new TableDiff(alignment);
+  // Let daff auto-size the highlight table
+  const highlightTable = new TableView([]);
+  const diff = new TableDiff(alignment, flags);
   diff.hilite(highlightTable);
 
   // Extract the actual data from the highlight table
   const resultData: any[][] = [];
-  for (let r = 0; r < highlightTable.height(); r++) {
+  for (let r = 0; r < highlightTable.height; r++) {
     const row: any[] = [];
-    for (let c = 0; c < highlightTable.width(); c++) {
+    for (let c = 0; c < highlightTable.width; c++) {
       row.push(highlightTable.getCell(c, r));
     }
     resultData.push(row);
@@ -176,9 +168,9 @@ export function threeWayMerge(
 
   // Convert output table back to CSV
   const mergedRows: any[][] = [];
-  for (let r = 0; r < outputTable.height(); r++) {
+  for (let r = 0; r < outputTable.height; r++) {
     const row: any[] = [];
-    for (let c = 0; c < outputTable.width(); c++) {
+    for (let c = 0; c < outputTable.width; c++) {
       row.push(outputTable.getCell(c, r));
     }
     mergedRows.push(row);
