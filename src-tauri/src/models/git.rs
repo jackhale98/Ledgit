@@ -7,6 +7,7 @@ pub struct Commit {
     pub message: String,
     pub author: String,
     pub timestamp: String,
+    pub refs: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

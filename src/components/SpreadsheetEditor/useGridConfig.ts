@@ -16,7 +16,20 @@ export function useGridConfig(
   defaultColDef: ColDef;
 } {
   const columnDefs = useMemo<ColDef[]>(() => {
-    return columns.map((col) => ({
+    const dragCol: ColDef = {
+      rowDrag: true,
+      width: 40,
+      maxWidth: 40,
+      suppressHeaderMenuButton: true,
+      editable: false,
+      sortable: false,
+      filter: false,
+      resizable: false,
+      field: '',
+      lockPosition: 'left',
+      suppressMovable: true,
+    };
+    const dataCols: ColDef[] = columns.map((col) => ({
       field: col.field,
       headerName: col.header_name,
       editable: true,
@@ -25,18 +38,21 @@ export function useGridConfig(
       resizable: true,
       cellStyle: cellStyleFn,
     }));
+    return [dragCol, ...dataCols];
   }, [columns, cellStyleFn]);
 
   const defaultColDef = useMemo<ColDef>(
     () => ({
       flex: 1,
-      minWidth: 100,
+      minWidth: 120,
       editable: true,
       sortable: true,
       filter: 'agTextColumnFilter',
-      floatingFilter: true,
+      floatingFilter: false,
       resizable: true,
-      suppressHeaderFilterButton: true,
+      filterParams: {
+        buttons: ['reset', 'apply'],
+      },
     }),
     [],
   );

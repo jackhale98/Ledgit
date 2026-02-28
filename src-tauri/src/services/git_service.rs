@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use git2::{
-    BranchType, DiffOptions, MergeOptions, Repository, Signature, Sort, StatusOptions,
+    BranchType, DiffOptions, MergeOptions, Repository, Signature, Sort,
+    StatusOptions, build::CheckoutBuilder,
 };
 
 use crate::models::error::AppError;
@@ -149,6 +151,8 @@ impl GitService {
         limit: usize,
         offset: usize,
     ) -> Result<Vec<Commit>, AppError> {
+        let ref_map = self.build_ref_map();
+
         let mut revwalk = self.repo.revwalk()?;
         revwalk.push_head()?;
         revwalk.set_sorting(Sort::TIME)?;
@@ -173,7 +177,8 @@ impl GitService {
                 continue;
             }
 
-            commits.push(Self::commit_to_model(&commit));
+            let refs = ref_map.get(&oid).cloned().unwrap_or_default();
+            commits.push(Self::commit_to_model_with_refs(&commit, refs));
 
             if commits.len() >= limit {
                 break;
@@ -243,7 +248,8 @@ impl GitService {
             .repo
             .revparse_single(&refname)?;
 
-        self.repo.checkout_tree(&obj, None)?;
+        self.repo
+            .checkout_tree(&obj, Some(CheckoutBuilder::new().force()))?;
         self.repo.set_head(&refname)?;
 
         Ok(())
@@ -276,7 +282,8 @@ impl GitService {
                 self.repo.reference(name, target_oid, true, "Fast-forward merge")?;
             }
             let obj = self.repo.find_object(target_oid, None)?;
-            self.repo.checkout_tree(&obj, None)?;
+            self.repo
+                .checkout_tree(&obj, Some(CheckoutBuilder::new().force()))?;
             // Re-set HEAD to refresh
             self.repo.set_head(head_ref.name().unwrap_or("refs/heads/main"))?;
 
@@ -379,7 +386,8 @@ impl GitService {
                 self.repo.reference(name, target_oid, true, "Fast-forward pull")?;
             }
             let obj = self.repo.find_object(target_oid, None)?;
-            self.repo.checkout_tree(&obj, None)?;
+            self.repo
+                .checkout_tree(&obj, Some(CheckoutBuilder::new().force()))?;
             self.repo.set_head(head_ref.name().unwrap_or("refs/heads/main"))?;
 
             let new_commits = Self::count_commits_between(&self.repo, head_oid_before, target_oid);
@@ -599,8 +607,43 @@ impl GitService {
         Ok(diff.deltas().count() > 0)
     }
 
-    /// Convert a git2::Commit to our model Commit.
+    /// Build a map from commit OID to ref names (branch names + HEAD).
+    fn build_ref_map(&self) -> HashMap<git2::Oid, Vec<String>> {
+        let mut map: HashMap<git2::Oid, Vec<String>> = HashMap::new();
+
+        // Add branch names
+        if let Ok(branches) = self.repo.branches(Some(BranchType::Local)) {
+            for branch_result in branches {
+                if let Ok((branch, _)) = branch_result {
+                    let name = branch.name().ok().flatten().map(|n| n.to_string());
+                    if let Some(name) = name {
+                        if let Ok(reference) = branch.into_reference().resolve() {
+                            if let Some(oid) = reference.target() {
+                                map.entry(oid).or_default().push(name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add HEAD
+        if let Ok(head) = self.repo.head() {
+            if let Some(oid) = head.target() {
+                map.entry(oid).or_default().push("HEAD".to_string());
+            }
+        }
+
+        map
+    }
+
+    /// Convert a git2::Commit to our model Commit (no refs).
     fn commit_to_model(commit: &git2::Commit) -> Commit {
+        Self::commit_to_model_with_refs(commit, Vec::new())
+    }
+
+    /// Convert a git2::Commit to our model Commit with refs.
+    fn commit_to_model_with_refs(commit: &git2::Commit, refs: Vec<String>) -> Commit {
         let hash = commit.id().to_string();
         let short_hash = hash[..7.min(hash.len())].to_string();
         let message = commit.message().unwrap_or("").to_string();
@@ -615,6 +658,7 @@ impl GitService {
             message,
             author,
             timestamp,
+            refs,
         }
     }
 }
@@ -649,5 +693,37 @@ mod tests {
 
         let log = service.log(None, 10, 0).unwrap();
         assert!(log.len() >= 2); // initial + our commit
+    }
+
+    #[test]
+    fn test_checkout_updates_working_directory() {
+        let dir = TempDir::new().unwrap();
+        let service = GitService::init(dir.path()).unwrap();
+
+        // Create data.csv on main and commit it
+        std::fs::write(dir.path().join("data.csv"), "a,b\n1,2\n").unwrap();
+        service
+            .commit("Add data.csv on main", &["data.csv".to_string()])
+            .unwrap();
+
+        // Create a new branch "feature" and switch to it
+        service.create_branch("feature", None).unwrap();
+        service.checkout("feature").unwrap();
+
+        // Modify the file on feature branch and commit
+        std::fs::write(dir.path().join("data.csv"), "a,b\n3,4\n").unwrap();
+        service
+            .commit("Update data.csv on feature", &["data.csv".to_string()])
+            .unwrap();
+
+        // Switch back to main
+        service.checkout("main").unwrap();
+        let content = std::fs::read_to_string(dir.path().join("data.csv")).unwrap();
+        assert_eq!(content, "a,b\n1,2\n", "checkout main should restore original file content");
+
+        // Switch to feature again
+        service.checkout("feature").unwrap();
+        let content = std::fs::read_to_string(dir.path().join("data.csv")).unwrap();
+        assert_eq!(content, "a,b\n3,4\n", "checkout feature should restore modified file content");
     }
 }

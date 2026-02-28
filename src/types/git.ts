@@ -5,6 +5,7 @@ export interface Commit {
   message: string;
   author: string;
   timestamp: string;
+  refs: string[];
 }
 
 /** Current working-tree / index status of the repository. */

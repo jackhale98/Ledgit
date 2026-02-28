@@ -16,6 +16,17 @@ html, body, #root {
   padding: 0;
 }
 
+/* AG Grid header: prevent text from overlapping with filter/sort icons */
+.ag-theme-alpine .ag-header-cell-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ag-theme-alpine .ag-header-cell-comp-wrapper {
+  overflow: hidden;
+}
+
 /* daff diff table styling */
 .daff-diff-table table {
   border-collapse: collapse;

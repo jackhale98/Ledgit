@@ -17,7 +17,9 @@ impl FileService {
         }
     }
 
-    /// Read a CSV file and return structured sheet data with inferred column types.
+    /// Read a CSV/TSV file and return structured sheet data with inferred column types.
+    /// Delimiter is detected from the file extension (.tsv → tab) or by sniffing
+    /// the first line for semicolons vs commas.
     pub fn read_csv(&self, file_path: &str) -> Result<SheetData, AppError> {
         let full_path = self.resolve_path(file_path);
         if !full_path.exists() {
@@ -27,7 +29,10 @@ impl FileService {
         let metadata = fs::metadata(&full_path)?;
         let size_bytes = metadata.len();
 
+        let delimiter = detect_delimiter(&full_path, file_path);
+
         let mut reader = csv::ReaderBuilder::new()
+            .delimiter(delimiter)
             .flexible(true)
             .from_path(&full_path)?;
 
@@ -67,7 +72,7 @@ impl FileService {
         let meta = FileMeta {
             file_path: file_path.to_string(),
             row_count,
-            delimiter: ',',
+            delimiter: delimiter as char,
             size_bytes,
         };
 
@@ -78,7 +83,8 @@ impl FileService {
         })
     }
 
-    /// Write columns and rows to a CSV file. Returns the resulting file size in bytes.
+    /// Write columns and rows to a CSV/TSV file. Returns the resulting file size in bytes.
+    /// Delimiter is chosen from the file extension (.tsv → tab, .csv → comma/semicolon).
     pub fn write_csv(
         &self,
         file_path: &str,
@@ -92,7 +98,11 @@ impl FileService {
             fs::create_dir_all(parent)?;
         }
 
-        let mut writer = csv::Writer::from_path(&full_path)?;
+        let delimiter = detect_delimiter(&full_path, file_path);
+
+        let mut writer = csv::WriterBuilder::new()
+            .delimiter(delimiter)
+            .from_path(&full_path)?;
 
         // Write header row
         let headers: Vec<&str> = columns.iter().map(|c| c.field.as_str()).collect();
@@ -128,7 +138,7 @@ impl FileService {
         Ok(files)
     }
 
-    /// Create a new empty CSV file with the given columns.
+    /// Create a new empty CSV/TSV file with the given columns.
     pub fn create_csv(
         &self,
         file_path: &str,
@@ -147,7 +157,11 @@ impl FileService {
             fs::create_dir_all(parent)?;
         }
 
-        let mut writer = csv::Writer::from_path(&full_path)?;
+        let delimiter = detect_delimiter(&full_path, file_path);
+
+        let mut writer = csv::WriterBuilder::new()
+            .delimiter(delimiter)
+            .from_path(&full_path)?;
         let headers: Vec<&str> = columns.iter().map(|c| c.field.as_str()).collect();
         writer.write_record(&headers)?;
         writer.flush()?;
@@ -228,6 +242,37 @@ impl FileService {
 }
 
 // ── Free-standing helpers ────────────────────────────────────────────
+
+/// Detect the delimiter for a file based on its extension and content.
+/// - `.tsv` → tab
+/// - `.csv` → sniff first line: if semicolons outnumber commas, use semicolon; else comma
+/// - anything else → comma
+fn detect_delimiter(full_path: &Path, file_path: &str) -> u8 {
+    let ext = Path::new(file_path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    match ext.as_str() {
+        "tsv" => b'\t',
+        _ => {
+            // Sniff the first line to detect semicolon-separated files
+            if full_path.exists() {
+                if let Ok(content) = fs::read_to_string(full_path) {
+                    if let Some(first_line) = content.lines().next() {
+                        let semicolons = first_line.matches(';').count();
+                        let commas = first_line.matches(',').count();
+                        if semicolons > commas {
+                            return b';';
+                        }
+                    }
+                }
+            }
+            b','
+        }
+    }
+}
 
 /// Try to parse a CSV cell value into a typed JSON value.
 /// Attempts number, then boolean, then falls back to string.
@@ -354,4 +399,218 @@ fn looks_like_date(s: &str) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_detect_delimiter_csv() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("data.csv");
+        fs::write(&path, "a,b,c\n1,2,3\n").unwrap();
+        assert_eq!(detect_delimiter(&path, "data.csv"), b',');
+    }
+
+    #[test]
+    fn test_detect_delimiter_tsv() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("data.tsv");
+        fs::write(&path, "a\tb\tc\n1\t2\t3\n").unwrap();
+        assert_eq!(detect_delimiter(&path, "data.tsv"), b'\t');
+    }
+
+    #[test]
+    fn test_detect_delimiter_semicolon() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("data.csv");
+        fs::write(&path, "a;b;c\n1;2;3\n").unwrap();
+        assert_eq!(detect_delimiter(&path, "data.csv"), b';');
+    }
+
+    #[test]
+    fn test_detect_delimiter_nonexistent_file() {
+        let path = Path::new("/tmp/nonexistent_test_file.csv");
+        assert_eq!(detect_delimiter(path, "nonexistent.csv"), b',');
+    }
+
+    #[test]
+    fn test_read_csv_comma() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("data.csv"), "name,age\nAlice,30\nBob,25\n").unwrap();
+
+        let service = FileService::new(dir.path());
+        let result = service.read_csv("data.csv").unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0].field, "name");
+        assert_eq!(result.columns[1].field, "age");
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.meta.delimiter, ',');
+    }
+
+    #[test]
+    fn test_read_csv_tab() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("data.tsv"), "name\tage\nAlice\t30\nBob\t25\n").unwrap();
+
+        let service = FileService::new(dir.path());
+        let result = service.read_csv("data.tsv").unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0].field, "name");
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.meta.delimiter, '\t');
+    }
+
+    #[test]
+    fn test_read_csv_semicolon() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("data.csv"), "name;age\nAlice;30\nBob;25\n").unwrap();
+
+        let service = FileService::new(dir.path());
+        let result = service.read_csv("data.csv").unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0].field, "name");
+        assert_eq!(result.rows.len(), 2);
+        assert_eq!(result.meta.delimiter, ';');
+    }
+
+    #[test]
+    fn test_write_and_read_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let service = FileService::new(dir.path());
+
+        let columns = vec![
+            Column { field: "x".into(), header_name: "X".into(), col_type: ColumnType::Text },
+            Column { field: "y".into(), header_name: "Y".into(), col_type: ColumnType::Number },
+        ];
+        let rows = vec![
+            {
+                let mut r = Row::new();
+                r.insert("x".into(), serde_json::Value::String("hello".into()));
+                r.insert("y".into(), serde_json::json!(42));
+                r
+            },
+        ];
+
+        service.write_csv("out.csv", &columns, &rows).unwrap();
+        let result = service.read_csv("out.csv").unwrap();
+
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(
+            result.rows[0].get("x").unwrap(),
+            &serde_json::Value::String("hello".into())
+        );
+    }
+
+    #[test]
+    fn test_write_tsv_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let service = FileService::new(dir.path());
+
+        let columns = vec![
+            Column { field: "a".into(), header_name: "A".into(), col_type: ColumnType::Text },
+            Column { field: "b".into(), header_name: "B".into(), col_type: ColumnType::Text },
+        ];
+        let rows = vec![
+            {
+                let mut r = Row::new();
+                r.insert("a".into(), serde_json::Value::String("one".into()));
+                r.insert("b".into(), serde_json::Value::String("two".into()));
+                r
+            },
+        ];
+
+        service.write_csv("out.tsv", &columns, &rows).unwrap();
+
+        // Verify the file actually has tabs
+        let content = fs::read_to_string(dir.path().join("out.tsv")).unwrap();
+        assert!(content.contains('\t'), "TSV file should contain tab characters");
+        assert!(!content.contains(','), "TSV file should not contain commas as delimiters");
+
+        let result = service.read_csv("out.tsv").unwrap();
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.meta.delimiter, '\t');
+    }
+
+    #[test]
+    fn test_list_csv_files_finds_csv_and_tsv() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("a.csv"), "x\n1\n").unwrap();
+        fs::write(dir.path().join("b.tsv"), "y\n2\n").unwrap();
+        fs::write(dir.path().join("c.txt"), "not a csv").unwrap();
+
+        let service = FileService::new(dir.path());
+        let files = service.list_csv_files().unwrap();
+
+        let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+        assert!(names.contains(&"a.csv"));
+        assert!(names.contains(&"b.tsv"));
+        assert!(!names.contains(&"c.txt"));
+    }
+
+    #[test]
+    fn test_file_not_found() {
+        let dir = TempDir::new().unwrap();
+        let service = FileService::new(dir.path());
+
+        let result = service.read_csv("nonexistent.csv");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_csv() {
+        let dir = TempDir::new().unwrap();
+        let service = FileService::new(dir.path());
+
+        let columns = vec![
+            Column { field: "id".into(), header_name: "ID".into(), col_type: ColumnType::Number },
+        ];
+
+        service.create_csv("new.csv", &columns).unwrap();
+
+        let result = service.read_csv("new.csv").unwrap();
+        assert_eq!(result.columns.len(), 1);
+        assert_eq!(result.rows.len(), 0);
+    }
+
+    #[test]
+    fn test_create_csv_already_exists() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("existing.csv"), "a\n1\n").unwrap();
+
+        let service = FileService::new(dir.path());
+        let columns = vec![
+            Column { field: "a".into(), header_name: "A".into(), col_type: ColumnType::Text },
+        ];
+
+        let result = service.create_csv("existing.csv", &columns);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_file() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("to_delete.csv"), "a\n1\n").unwrap();
+
+        let service = FileService::new(dir.path());
+        service.delete_file("to_delete.csv").unwrap();
+
+        assert!(!dir.path().join("to_delete.csv").exists());
+    }
+
+    #[test]
+    fn test_infer_value_types() {
+        assert_eq!(infer_value("42"), serde_json::json!(42));
+        assert_eq!(infer_value("3.14"), serde_json::json!(3.14));
+        assert_eq!(infer_value("hello"), serde_json::json!("hello"));
+        assert_eq!(infer_value(""), serde_json::Value::Null);
+        assert_eq!(infer_value("true"), serde_json::json!(true));
+        assert_eq!(infer_value("false"), serde_json::json!(false));
+    }
 }

@@ -4,6 +4,8 @@ A lightweight desktop application for editing CSV files with built-in git versio
 
 Built with [Tauri](https://tauri.app/) (Rust) and [React](https://react.dev/) (TypeScript).
 
+![Ledgit Screenshot](docs/screenshot.png)
+
 ## Features
 
 ### Spreadsheet Editing

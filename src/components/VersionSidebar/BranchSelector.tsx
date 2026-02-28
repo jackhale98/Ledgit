@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useGitStore } from '../../stores/useGitStore';
+import { useSheetStore } from '../../stores/useSheetStore';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { showToast } from '../common/Toast';
@@ -22,14 +23,39 @@ export const BranchSelector: React.FC = () => {
   const [newBranchName, setNewBranchName] = useState('');
   const [mergeSource, setMergeSource] = useState('');
 
+  const filePath = useSheetStore((s) => s.filePath);
+  const loadFile = useSheetStore((s) => s.loadFile);
+  const clearFile = useSheetStore((s) => s.clearFile);
+  const sheetIsDirty = useSheetStore((s) => s.isDirty);
+  const status = useGitStore((s) => s.status);
+
   const handleSwitch = async (branch: string) => {
+    // Warn if there are uncommitted changes
+    if (sheetIsDirty || (status && !status.clean)) {
+      const confirmed = window.confirm(
+        'You have uncommitted changes. Switching branches will discard them. Continue?',
+      );
+      if (!confirmed) return;
+    }
+
     try {
       await switchBranch(branch);
       setDropdownOpen(false);
       showToast(`Switched to branch "${branch}"`, 'success');
-      fetchStatus();
-      fetchBranches();
-      fetchLog();
+      await fetchStatus();
+      await fetchBranches();
+      await fetchLog();
+
+      // Reload the currently open file from the new branch
+      if (filePath) {
+        try {
+          await loadFile(filePath);
+        } catch {
+          // File doesn't exist on the target branch
+          clearFile();
+          showToast('File does not exist on this branch', 'info');
+        }
+      }
     } catch (err) {
       showToast(`Failed to switch branch: ${err}`, 'error');
     }

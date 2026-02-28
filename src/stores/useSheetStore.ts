@@ -23,8 +23,12 @@ interface SheetState {
   updateCell: (rowIndex: number, field: string, value: any) => void;
   addRow: (atIndex?: number) => void;
   removeRow: (rowIndex: number) => void;
+  moveRow: (fromIndex: number, toIndex: number) => void;
   addColumn: (column: Column, atIndex?: number) => void;
   removeColumn: (field: string) => void;
+  moveColumn: (fromIndex: number, toIndex: number) => void;
+  reorderColumns: (fieldOrder: string[]) => void;
+  clearFile: () => void;
   save: () => Promise<void>;
   undo: () => void;
   redo: () => void;
@@ -105,6 +109,21 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     });
   },
 
+  moveRow: (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const { columns, rows, undoStack } = get();
+    const snapshot = takeSnapshot({ columns, rows });
+    const newRows = [...rows];
+    const [moved] = newRows.splice(fromIndex, 1);
+    newRows.splice(toIndex, 0, moved);
+    set({
+      rows: newRows,
+      isDirty: true,
+      undoStack: [...undoStack, snapshot].slice(-MAX_UNDO),
+      redoStack: [],
+    });
+  },
+
   addColumn: (column: Column, atIndex?: number) => {
     const { columns, rows, undoStack } = get();
     const snapshot = takeSnapshot({ columns, rows });
@@ -115,6 +134,39 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     set({
       columns: newColumns,
       rows: newRows,
+      isDirty: true,
+      undoStack: [...undoStack, snapshot].slice(-MAX_UNDO),
+      redoStack: [],
+    });
+  },
+
+  moveColumn: (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const { columns, rows, undoStack } = get();
+    const snapshot = takeSnapshot({ columns, rows });
+    const newColumns = [...columns];
+    const [moved] = newColumns.splice(fromIndex, 1);
+    newColumns.splice(toIndex, 0, moved);
+    set({
+      columns: newColumns,
+      isDirty: true,
+      undoStack: [...undoStack, snapshot].slice(-MAX_UNDO),
+      redoStack: [],
+    });
+  },
+
+  reorderColumns: (fieldOrder: string[]) => {
+    const { columns, rows, undoStack } = get();
+    const colMap = new Map(columns.map((c) => [c.field, c]));
+    const newColumns = fieldOrder
+      .map((f) => colMap.get(f))
+      .filter((c): c is Column => c != null);
+    if (newColumns.length !== columns.length) return;
+    const currentOrder = columns.map((c) => c.field);
+    if (JSON.stringify(fieldOrder) === JSON.stringify(currentOrder)) return;
+    const snapshot = takeSnapshot({ columns, rows });
+    set({
+      columns: newColumns,
       isDirty: true,
       undoStack: [...undoStack, snapshot].slice(-MAX_UNDO),
       redoStack: [],
@@ -135,6 +187,17 @@ export const useSheetStore = create<SheetState>((set, get) => ({
       rows: newRows,
       isDirty: true,
       undoStack: [...undoStack, snapshot].slice(-MAX_UNDO),
+      redoStack: [],
+    });
+  },
+
+  clearFile: () => {
+    set({
+      columns: [],
+      rows: [],
+      filePath: null,
+      isDirty: false,
+      undoStack: [],
       redoStack: [],
     });
   },

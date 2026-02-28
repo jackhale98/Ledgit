@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useGitStore } from '../../stores/useGitStore';
 import { useSheetStore } from '../../stores/useSheetStore';
 import { useDiffStore } from '../../stores/useDiffStore';
@@ -14,6 +14,7 @@ export const CommitPanel: React.FC = () => {
   const [previewFile, setPreviewFile] = useState<string | null>(null);
   const [previewDiff, setPreviewDiff] = useState<DiffResult | null>(null);
   const [isLoadingDiff, setIsLoadingDiff] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   const status = useGitStore((s) => s.status);
   const commits = useGitStore((s) => s.commits);
@@ -31,6 +32,54 @@ export const CommitPanel: React.FC = () => {
     ...(status?.untracked ?? []),
   ];
   const uniqueFiles = [...new Set(changedFiles)];
+
+  // Sync selectedFiles when the file list changes — add new files, remove gone ones
+  useEffect(() => {
+    setSelectedFiles((prev) => {
+      const updated = new Set<string>();
+      for (const f of uniqueFiles) {
+        // Keep existing selection state; default new files to selected
+        if (prev.has(f) || !prev.size || !Array.from(prev).some((p) => uniqueFiles.includes(p) || !uniqueFiles.includes(p))) {
+          updated.add(f);
+        }
+      }
+      // If prev was empty (initial), select all
+      if (prev.size === 0) return new Set(uniqueFiles);
+      // Otherwise, keep files that still exist and add any new ones
+      const next = new Set<string>();
+      for (const f of uniqueFiles) {
+        if (prev.has(f)) {
+          next.add(f);
+        } else {
+          // New file — default to selected
+          next.add(f);
+        }
+      }
+      return next;
+    });
+  }, [uniqueFiles.join(',')]);
+
+  const toggleFile = (file: string) => {
+    setSelectedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(file)) {
+        next.delete(file);
+      } else {
+        next.add(file);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedFiles.size === uniqueFiles.length) {
+      setSelectedFiles(new Set());
+    } else {
+      setSelectedFiles(new Set(uniqueFiles));
+    }
+  };
+
+  const selectedCount = selectedFiles.size;
 
   const handleFileClick = async (file: string) => {
     if (previewFile === file) {
@@ -78,17 +127,18 @@ export const CommitPanel: React.FC = () => {
   };
 
   const handleCommit = async () => {
-    if (!message.trim() || uniqueFiles.length === 0) return;
+    if (!message.trim() || selectedCount === 0) return;
 
     setIsCommitting(true);
     try {
       if (isDirty) {
         await save();
       }
-      await commitChanges(message.trim(), uniqueFiles);
+      await commitChanges(message.trim(), [...selectedFiles]);
       setMessage('');
       setPreviewFile(null);
       setPreviewDiff(null);
+      setSelectedFiles(new Set());
       showToast('Commit created', 'success');
       await fetchStatus();
       await fetchLog(filePath ?? undefined);
@@ -105,27 +155,53 @@ export const CommitPanel: React.FC = () => {
       {uniqueFiles.length > 0 && (
         <div className="mb-2">
           <p className="mb-1 text-xs font-medium text-gray-500">
-            {uniqueFiles.length} changed file{uniqueFiles.length !== 1 ? 's' : ''}
+            {uniqueFiles.length} changed file{uniqueFiles.length !== 1 ? 's' : ''}{' '}
+            ({selectedCount} selected)
           </p>
+          <label className="mb-0.5 flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs text-gray-600 hover:bg-gray-50">
+            <input
+              type="checkbox"
+              checked={selectedCount === uniqueFiles.length}
+              ref={(el) => {
+                if (el) el.indeterminate = selectedCount > 0 && selectedCount < uniqueFiles.length;
+              }}
+              onChange={toggleAll}
+              className="h-3 w-3 rounded border-gray-300 text-blue-600"
+            />
+            <span className="font-medium">Select all</span>
+          </label>
           <div className="max-h-24 overflow-y-auto">
             {uniqueFiles.map((f) => (
-              <button
+              <div
                 key={f}
-                onClick={() => handleFileClick(f)}
                 className={`flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-xs transition-colors ${
                   previewFile === f
                     ? 'bg-blue-50 text-blue-700'
                     : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                <span className="truncate">{f}</span>
-                {status?.untracked.includes(f) && (
-                  <span className="shrink-0 rounded bg-green-100 px-1 text-green-700">new</span>
-                )}
-                {status?.modified.includes(f) && (
-                  <span className="shrink-0 rounded bg-yellow-100 px-1 text-yellow-700">mod</span>
-                )}
-              </button>
+                <input
+                  type="checkbox"
+                  checked={selectedFiles.has(f)}
+                  onChange={() => toggleFile(f)}
+                  className="h-3 w-3 shrink-0 rounded border-gray-300 text-blue-600"
+                />
+                <button
+                  onClick={() => handleFileClick(f)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5"
+                >
+                  <span className="truncate">{f}</span>
+                  {selectedFiles.has(f) && (
+                    <span className="shrink-0 rounded bg-blue-100 px-1 text-blue-700">staged</span>
+                  )}
+                  {status?.untracked.includes(f) && (
+                    <span className="shrink-0 rounded bg-green-100 px-1 text-green-700">new</span>
+                  )}
+                  {status?.modified.includes(f) && (
+                    <span className="shrink-0 rounded bg-yellow-100 px-1 text-yellow-700">mod</span>
+                  )}
+                </button>
+              </div>
             ))}
           </div>
         </div>
@@ -163,10 +239,12 @@ export const CommitPanel: React.FC = () => {
       />
       <button
         onClick={handleCommit}
-        disabled={!message.trim() || uniqueFiles.length === 0 || isCommitting}
+        disabled={!message.trim() || selectedCount === 0 || isCommitting}
         className="mt-1.5 w-full rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {isCommitting ? 'Committing…' : 'Commit'}
+        {isCommitting
+          ? 'Committing…'
+          : `Commit ${selectedCount} file${selectedCount !== 1 ? 's' : ''}`}
       </button>
     </div>
   );

@@ -74,10 +74,23 @@ export const CommitList: React.FC = () => {
                     : 'cursor-default'
               }`}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-600">
                   {commit.short_hash}
                 </span>
+                {commit.refs?.includes('HEAD') && (
+                  <span className="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700">
+                    HEAD
+                  </span>
+                )}
+                {commit.refs?.filter((r) => r !== 'HEAD').map((ref_name) => (
+                  <span
+                    key={ref_name}
+                    className="rounded bg-orange-100 px-1.5 py-0.5 text-xs font-medium text-orange-700"
+                  >
+                    {ref_name}
+                  </span>
+                ))}
                 {isFrom && (
                   <span className="rounded bg-blue-100 px-1 py-0.5 text-xs text-blue-700">
                     FROM
