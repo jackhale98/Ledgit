@@ -271,7 +271,7 @@ fn infer_column_types(headers: &[String], rows: &[Row]) -> Vec<ColumnType> {
             let mut num_count = 0u32;
             let mut bool_count = 0u32;
             let mut date_count = 0u32;
-            let mut text_count = 0u32;
+            let mut _text_count = 0u32;
             let mut non_null = 0u32;
 
             for row in sample {
@@ -292,11 +292,11 @@ fn infer_column_types(headers: &[String], rows: &[Row]) -> Vec<ColumnType> {
                             if looks_like_date(s) {
                                 date_count += 1;
                             } else {
-                                text_count += 1;
+                                _text_count += 1;
                             }
                         }
                         _ => {
-                            text_count += 1;
+                            _text_count += 1;
                             non_null += 1;
                         }
                     }

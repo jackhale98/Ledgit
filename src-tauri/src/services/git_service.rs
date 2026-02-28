@@ -5,7 +5,7 @@ use git2::{
 };
 
 use crate::models::error::AppError;
-use crate::models::git::{BranchList, Commit, MergeResult, Remote, RepoInfo, RepoStatus};
+use crate::models::git::{BranchList, Commit, MergeResult, PullResult, Remote, RepoInfo, RepoStatus};
 
 pub struct GitService {
     repo: Repository,
@@ -36,18 +36,20 @@ impl GitService {
         index.add_path(Path::new(".gitattributes"))?;
         index.write()?;
         let tree_oid = index.write_tree()?;
-        let tree = repo.find_tree(tree_oid)?;
 
-        // Make initial commit
-        let sig = Self::default_signature(&repo)?;
-        repo.commit(
-            Some("HEAD"),
-            &sig,
-            &sig,
-            "Initial commit – Ledgit repository",
-            &tree,
-            &[], // no parents for initial commit
-        )?;
+        // Make initial commit (scope tree/sig so repo isn't borrowed when moved)
+        {
+            let tree = repo.find_tree(tree_oid)?;
+            let sig = Self::default_signature(&repo)?;
+            repo.commit(
+                Some("HEAD"),
+                &sig,
+                &sig,
+                "Initial commit – Ledgit repository",
+                &tree,
+                &[], // no parents for initial commit
+            )?;
+        }
 
         Ok(Self { repo })
     }
@@ -345,7 +347,10 @@ impl GitService {
     }
 
     /// Pull from a remote (fetch + merge).
-    pub fn pull(&self, remote_name: &str, branch: &str) -> Result<MergeResult, AppError> {
+    pub fn pull(&self, remote_name: &str, branch: &str) -> Result<PullResult, AppError> {
+        // Remember HEAD before pull to count new commits afterwards
+        let head_oid_before = self.repo.head().ok().and_then(|h| h.target());
+
         // Fetch
         let mut remote = self.repo.find_remote(remote_name)?;
         remote.fetch(&[branch], None, None)?;
@@ -360,8 +365,9 @@ impl GitService {
         let (analysis, _) = self.repo.merge_analysis(&[&annotated])?;
 
         if analysis.is_up_to_date() {
-            return Ok(MergeResult {
-                success: true,
+            return Ok(PullResult {
+                updated: false,
+                new_commits: 0,
                 conflicts: None,
             });
         }
@@ -376,8 +382,10 @@ impl GitService {
             self.repo.checkout_tree(&obj, None)?;
             self.repo.set_head(head_ref.name().unwrap_or("refs/heads/main"))?;
 
-            return Ok(MergeResult {
-                success: true,
+            let new_commits = Self::count_commits_between(&self.repo, head_oid_before, target_oid);
+            return Ok(PullResult {
+                updated: true,
+                new_commits,
                 conflicts: None,
             });
         }
@@ -396,8 +404,9 @@ impl GitService {
                     conflict_files.push(path);
                 }
             }
-            return Ok(MergeResult {
-                success: false,
+            return Ok(PullResult {
+                updated: false,
+                new_commits: 0,
                 conflicts: Some(conflict_files),
             });
         }
@@ -421,8 +430,10 @@ impl GitService {
 
         self.repo.cleanup_state()?;
 
-        Ok(MergeResult {
-            success: true,
+        let new_commits = Self::count_commits_between(&self.repo, head_oid_before, annotated.id());
+        Ok(PullResult {
+            updated: true,
+            new_commits,
             conflicts: None,
         })
     }
@@ -551,6 +562,19 @@ impl GitService {
                 Ok(sig)
             }
         }
+    }
+
+    /// Count commits between an old HEAD and a new OID.
+    fn count_commits_between(repo: &Repository, old_head: Option<git2::Oid>, new_oid: git2::Oid) -> u32 {
+        let Ok(mut revwalk) = repo.revwalk() else { return 0 };
+        if revwalk.push(new_oid).is_err() {
+            return 0;
+        }
+        if let Some(old) = old_head {
+            let _ = revwalk.hide(old);
+        }
+        revwalk.set_sorting(Sort::TIME).ok();
+        revwalk.count() as u32
     }
 
     /// Check if a commit modifies a specific file.

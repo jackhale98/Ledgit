@@ -4,7 +4,7 @@ use tauri::State;
 
 use crate::commands::file_commands::AppState;
 use crate::models::error::AppError;
-use crate::models::git::{BranchList, Commit, MergeResult, Remote, RepoStatus};
+use crate::models::git::{BranchList, Commit, MergeResult, PullResult, Remote, RepoStatus};
 use crate::services::git_service::GitService;
 
 /// Helper to get the GitService from the current AppState.
@@ -120,7 +120,7 @@ pub fn git_pull(
     state: State<AppState>,
     remote: Option<String>,
     branch: Option<String>,
-) -> Result<MergeResult, AppError> {
+) -> Result<PullResult, AppError> {
     let service = get_git_service(&state)?;
     let remote_name = remote.as_deref().unwrap_or("origin");
     let branch_name = match branch {
